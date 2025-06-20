@@ -26,12 +26,10 @@ def scrape_site(url, tags, custom_selectors=None, screenshots_folder="screenshot
         while True:
             text_data = []
 
-            # Scrape standard tags
             for tag in tags:
                 elements = page.query_selector_all(tag)
                 text_data.extend([el.inner_text() for el in elements if el.inner_text()])
 
-            # Scrape custom selectors
             if custom_selectors:
                 for selector in custom_selectors:
                     elements = page.query_selector_all(selector)
@@ -42,12 +40,10 @@ def scrape_site(url, tags, custom_selectors=None, screenshots_folder="screenshot
                 "text": text_data
             })
 
-            # Screenshot
-            shot_name = f"{screenshots_folder}/page_{page_number}.png"
-            page.screenshot(path=shot_name, full_page=True)
-            screenshots.append(shot_name)
+            shot_path = f"{screenshots_folder}/page_{page_number}.png"
+            page.screenshot(path=shot_path, full_page=True)
+            screenshots.append(shot_path)
 
-            # Try next page
             next_links = page.query_selector_all("a")
             clicked = False
             for link in next_links:
@@ -66,13 +62,11 @@ def scrape_site(url, tags, custom_selectors=None, screenshots_folder="screenshot
 
         browser.close()
 
-    # ZIP screenshots
     zip_filename = "screenshots.zip"
     with zipfile.ZipFile(zip_filename, 'w') as zipf:
         for file in screenshots:
             zipf.write(file, os.path.basename(file))
 
-    # Save to CSV
     csv_filename = "scraped_data.csv"
     with open(csv_filename, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -81,26 +75,35 @@ def scrape_site(url, tags, custom_selectors=None, screenshots_folder="screenshot
             for text in entry["text"]:
                 writer.writerow([entry["page"], text])
 
-    # Per-page PDF
-    per_page_pdf_paths = []
+    per_page_pdfs = []
     for i, image_path in enumerate(screenshots, start=1):
         pdf = FPDF()
         pdf.add_page()
-        pdf.image(image_path, x=10, y=10, w=190)  # fit to A4
+        pdf.image(image_path, x=10, y=10, w=190)
         pdf_path = f"{screenshots_folder}/page_{i}.pdf"
         pdf.output(pdf_path)
-        per_page_pdf_paths.append(pdf_path)
+        per_page_pdfs.append(pdf_path)
 
-    # Combined multi-page PDF
-    combined_pdf_path = "combined_screenshots.pdf"
+    combined_pdf = "combined_screenshots.pdf"
     pdf = FPDF()
     for image_path in screenshots:
         pdf.add_page()
         pdf.image(image_path, x=10, y=10, w=190)
-    pdf.output(combined_pdf_path)
+    pdf.output(combined_pdf)
 
-    return data, screenshots, zip_filename, csv_filename, per_page_pdf_paths, combined_pdf_path
+    return data, screenshots, zip_filename, csv_filename, per_page_pdfs, combined_pdf
 
 
 def run_scraper(url, tags, custom_selectors):
     return scrape_site(url, tags, custom_selectors)
+
+
+def export_html_to_pdf(url, output_pdf_path="exported_page.pdf"):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(url, wait_until="networkidle")
+        page.pdf(path=output_pdf_path, format="A4")
+        browser.close()
+    return output_pdf_path
